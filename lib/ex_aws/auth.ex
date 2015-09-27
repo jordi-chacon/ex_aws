@@ -142,7 +142,7 @@ defmodule ExAws.Auth do
     <> "X-Amz-SignedHeaders=host"
     <> case config[:security_token] do
          nil -> ""
-         token -> "&X-Amz-Security-Token=#{token}"
+         token -> "&X-Amz-Security-Token=#{uri_encode(token)}"
        end
   end
 
