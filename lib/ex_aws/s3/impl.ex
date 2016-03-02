@@ -116,7 +116,7 @@ defmodule ExAws.S3.Impl do
 
   @params [:delimiter, :encoding_type, :max_uploads, :key_marker, :prefix, :upload_id_marker]
   def list_multipart_uploads(client, bucket, opts \\ []) do
-    params = @params |> format_and_take(opts)
+    params = opts |> format_and_take(@params)
     request(client, :get, bucket, "/", resource: "uploads", params: params)
   end
 
@@ -222,11 +222,15 @@ defmodule ExAws.S3.Impl do
       "<Delete>",
       objects_xml,
       "</Delete>"
-    ] |> IO.iodata_to_binary
-    request(client, :post, bucket, "/?delete", body: body)
+    ]
+
+    content_md5 = :crypto.hash(:md5, body) |> Base.encode64
+    body_binary = body |> IO.iodata_to_binary
+
+    request(client, :post, bucket, "/?delete", body: body_binary, headers: %{"content-md5" => content_md5})
   end
 
-  @response_params [:content_type, :content_language, :expires, :cach_control, :content_disposition, :content_encoding]
+  @response_params [:content_type, :content_language, :expires, :cache_control, :content_disposition, :content_encoding]
   @request_headers [:range, :if_modified_since, :if_unmodified_since, :if_match, :if_none_match]
   def get_object(client, bucket, object, opts \\ []) do
     opts = opts |> Enum.into(%{})
@@ -347,17 +351,15 @@ defmodule ExAws.S3.Impl do
     |> Map.get(:destination_encryption, %{})
     |> build_encryption_headers
 
-    meta = opts
-    |> Map.get(:meta)
-    |> build_meta_headers
+    regular_headers = opts
+    |> Map.delete(:encryption)
+    |> put_object_headers
 
-    headers = opts
-    |> format_acl_headers
+    headers = regular_headers
     |> Map.merge(amz_headers)
     |> Map.merge(source_encryption)
     |> Map.merge(destination_encryption)
-    |> Map.merge(meta)
-    |> Map.put("x-amz-copy-source", "/#{src_bucket}/#{src_object}")
+    |> Map.put("x-amz-copy-source", URI.encode "/#{src_bucket}/#{src_object}")
 
     request(client, :put, dest_bucket, dest_object, headers: headers)
   end
@@ -372,9 +374,9 @@ defmodule ExAws.S3.Impl do
     |> Parsers.parse_initiate_multipart_upload
   end
 
-  def upload_part(client, bucket, object, upload_id, part_number, _opts \\ []) do
+  def upload_part(client, bucket, object, upload_id, part_number, body, _opts \\ []) do
     params = %{"uploadId" => upload_id, "partNumber" => part_number}
-    request(client, :put, bucket, object, params: params)
+    request(client, :put, bucket, object, params: params, body: body)
   end
 
   @amz_headers ~w(
@@ -463,7 +465,7 @@ defmodule ExAws.S3.Impl do
   defp url_to_sign(bucket, object, config, virtual_host) do
     object = ExAws.S3.Request.ensure_slash(object)
     case virtual_host do
-      true -> "http://#{bucket}.#{config[:host]}#{object}"
+      true -> "#{config[:scheme]}#{bucket}.#{config[:host]}#{object}"
       false -> "#{config[:scheme]}#{config[:host]}/#{bucket}#{object}"
     end
   end

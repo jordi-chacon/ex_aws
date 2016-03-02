@@ -1,8 +1,3 @@
-defmodule Test.Nested do
-  @derive {ExAws.Dynamo.Encodable, only: [:items]}
-  defstruct items: [], secret: nil
-end
-
 defmodule ExAws.Dynamo.EncoderTest do
   use ExUnit.Case, async: true
   alias ExAws.Dynamo.Encoder
@@ -14,11 +9,6 @@ defmodule ExAws.Dynamo.EncoderTest do
   test "Encoder can handle map values" do
     result = %{foo: 1, bar: %{baz: 2, zounds: "asdf"}} |> Encoder.encode
     assert %{"M" => %{"bar" => %{"M" => %{"baz" => %{"N" => "2"}, "zounds" => %{"S" => "asdf"}}}, "foo" => %{"N" => "1"}}} == result
-  end
-
-  test "Encoder handles hashdicts" do
-    dict = %{foo: 1, bar: 2} |> Enum.into(HashDict.new)
-    assert dict |> Encoder.encode == %{"M" => %{"bar" => %{"N" => "2"}, "foo" => %{"N" => "1"}}}
   end
 
   test "Encoder can handle floats" do

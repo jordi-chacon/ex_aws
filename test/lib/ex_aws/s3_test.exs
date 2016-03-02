@@ -55,6 +55,16 @@ defmodule ExAws.S3Test do
       meta: [foo: "sqiggles"])
   end
 
+  test "#put_object_copy basic" do
+    expected = %{bucket: "dest-bucket", headers: %{"x-amz-copy-source" => "/src-bucket/src-object"}, path: "dest-object"}
+    assert expected == S3.put_object_copy("dest-bucket", "dest-object", "src-bucket", "src-object")
+  end
+
+  test "#put_object_copy utf8" do
+    expected = %{bucket: "dest-bucket", headers: %{"x-amz-copy-source" => "/src-bucket//foo/%C3%BC.txt"}, path: "dest-object"}
+    assert expected == S3.put_object_copy("dest-bucket", "dest-object", "src-bucket", "/foo/ü.txt")
+  end
+
   test "#complete_multipart_upload" do
     expected = %{
       body: "<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>foo</ETag></Part><Part><PartNumber>2</PartNumber><ETag>bar</ETag></Part></CompleteMultipartUpload>",
@@ -74,7 +84,7 @@ defmodule ExAws.S3Test do
 
   test "#delete_multiple_objects" do
     expected = %{body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Delete><Object><Key>foo</Key></Object><Object><Key>bar</Key><VersionId>v1</VersionId></Object></Delete>",
-      bucket: "bucket", path: "/?delete"}
+      bucket: "bucket", path: "/?delete", headers: %{"content-md5" => "lvfX5nHeLllWDA7QnpsnrA=="}}
 
     assert expected == S3.delete_multiple_objects("bucket", ["foo", {"bar", "v1"}])
   end
@@ -111,13 +121,13 @@ defmodule ExAws.S3Test do
 
   test "#presigned_url passing virtual_host=true option" do
     {:ok, url} = S3.presigned_url(:get, "bucket", "foo.txt", [virtual_host: true])
-    assert_pre_signed_url(url, "http://bucket.s3.amazonaws.com/foo.txt", "3600")
+    assert_pre_signed_url(url, "https://bucket.s3.amazonaws.com/foo.txt", "3600")
   end
 
   test "#presigned_url passing both expires_in and virtual_host options" do
     opts = [expires_in: 100, virtual_host: true]
     {:ok, url} = S3.presigned_url(:get, "bucket", "foo.txt", opts)
-    assert_pre_signed_url(url, "http://bucket.s3.amazonaws.com/foo.txt", "100")
+    assert_pre_signed_url(url, "https://bucket.s3.amazonaws.com/foo.txt", "100")
   end
 
   test "#presigned_url file is path with slash" do
